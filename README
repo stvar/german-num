@@ -1,0 +1,215 @@
+
+                           German Numeral Expressions
+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~
+                        Stefan Vargyas, stvar@yahoo.com
+
+                                  Dec  8, 2016
+
+Table of Contents
+-----------------
+
+0. Copyright
+1. The German-Num Program
+2. Building German-Num
+3. Running German-Num
+4. German-Num Internals
+5. References
+
+
+0. Copyright
+============
+
+This program is GPL-licensed free software. Its author is Stefan Vargyas. You
+can redistribute it and/or modify it under the terms of the GNU General Public
+License as published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+You should have received a copy of the GNU General Public License along with
+this program (look up for the file COPYING in the top directory of the source
+tree). If not, see http://gnu.org/licenses/gpl.html.
+
+
+1. The German-Num Program
+=========================
+
+The German-Num program's vocation is that of a parser and numerical evaluator
+for cardinal numbers expressed in plain German. It is by no means complete,
+since it was built relying on a set of rules implicitly and loosely specified
+(see [1] and [2]) -- without access to aknowledged and comprehensive sources
+for the rules of German grammar, and without prior experience with the German
+language itself.
+
+In the absence of authoritative sources with regards to the way the numerals are
+defined correctly and completely in the German language, is very likely that the
+implementation herein is fulfilling only partially the originating goals.
+
+This program was written back in October 2010 -- it belongs to the pre-C++11 era
+-- and evolved only a bit since its initial inception. It wasn't brought in yet
+to the realm of C++11 (or C++14), in spite of that being actually a trivial task.
+
+
+2. Building German-Num
+======================
+
+The German-Num program is written in modern C++ (but not *that modern*, since
+not reached C++11's realm yet) and was developed under a GNU/Linux environment
+using the GCC C++ compilers 4.1.2 and (later) 4.3.4 and also a few fairly common
+GNU/Linux power-tools.
+
+Note that German-Num is actually needing a GCC compiler (or a compatible one for
+that matter: e.g. clang).
+
+For building the program simply issue 'make' in the 'src' directory:
+
+  $ make -C src
+
+Expect to get neither warnings not errors out of 'make'. If everything went OK,
+'make' is supposed to have produced the binary 'calc'. The 'Makefile' in 'src'
+directory is simple enough to not cause big trouble if not using GNU 'make'.
+
+The German-Num is equipped with a comprehensive test suite. For that look into
+the directory 'test' for shell script files of form 'test*.sh'. The main script
+is 'test.sh': it starts the whole regression testing process. Note that these
+bash shell scripts depend upon a few utility programs commonly found on every
+GNU/Linux installation. The 'test' directory contains additionally the source
+from which the 'test*.sh' bash scripts were generated: the file 'test.txt'.
+
+Invoking the shell script 'test/test.sh' produces a series of lines as shown:
+
+  $ cd test
+
+  $ ./test.sh
+  test: NAME RESULT
+  ...
+
+NAME is the name of the test case and RESULT is either 'OK' or 'failed'. The
+expected behaviour would be that of all test cases to succeed. In the case of
+things going the wrong way for a particular test case, more verbose output is
+obtainable when running the corresponding 'test-*.sh' shell script on its own.
+It will produce a diff between expected and actual output of 'calc'.
+
+Note that any user's explicit invocation of these bash test scripts must be
+initiated from within the 'test' directory.
+
+The programs used by the testing scripts 'test/test*.sh' are the following:
+
+  * GNU awk 3.1.8
+  * GNU bash 3.2.51
+  * GNU coreutils 8.12 (cut, mktemp, tee)
+  * GNU diffutils 2.8.7 (diff)
+  * GNU sed 4.1.5
+  * super-sed 3.62 (ssed)
+  * Trie-Gen v0.4 (trie)
+
+Note that the 'trie' program must be build out of the sources of 'Trie-Gen'
+(http://nongnu.org/trie-gen). To obtain the source tree, one has to clone
+it from its public git repository (git://git.sv.nongnu.org/trie-gen). The
+README file in the top directory of the cloned tree describes in detail the
+procedure of obtaining the 'trie' binary.
+
+If one does not want to build 'trie' -- for example, because it requires a GCC
+compiler of version at least 4.8.0 --, then he should expect three of the test
+cases invoked by 'test/test.sh' to fail:
+
+  $ cd test
+
+  $ ./test.sh -q
+  test: gen-func     failed
+  test: gen-func-ex  failed
+  test: lookup-token failed
+
+
+3. Running German-Num
+=====================
+
+Building the sole source file contained in the package -- calc.cpp -- produced
+the binary 'calc'. First thing to look at is the help info 'calc' is providing:
+
+  $ ./calc --help
+  usage: calc [OPTION|INPUT]...
+  the options are:
+    -i|--interact-input  input type: interactive
+    -a|--args-input      input type: command line arguments (default)
+    -N|--numeral-parser  parser type: numeral
+    -E|--expr-parser     parser type: expression (default)
+    -s|--free-spaces     let spaces be free separating numeral tokens
+       --no-free-spaces  or otherwise do not (default)
+    -d|--debug           print some debugging output
+    -D|--no-debug        do not print debugging output (default)
+       --dump-options    print options and exit
+    -V|--verbose         be verbose
+    -v|--version         print version numbers and exit
+    -?|--help            display this help info and exit
+
+Basically, 'calc' functions in two different modes. One is as follows: once the
+program is started from a terminal, it enters an interactive loop, blocking and
+waiting for the user to provide expressions by entering them at the '>' prompt.
+When input is given, 'calc' processes it and prints on the terminal output the
+resulting numerical value:
+
+  $ ./calc -i
+  > 1+2*3
+  7
+  > eins plus zwei mal drei
+  7
+  >
+
+Note that entering an empty line in interactive mode tells 'calc' to quit its
+input loop and terminate execution.
+
+The other mode of operation of 'calc' allows the user to pass input expressions
+to the program via its command line arguments:
+
+  $ ./calc -a 'dreihundertzweiundneunzig mal 7' '12 minus 3'
+  2744
+  9
+
+
+4. German-Num Internals
+=======================
+
+The German-Num program is comprised of only one source file, that is 'calc.cpp'.
+I have choosen to put together in one single source file all the modules of
+German-Num program for the sake of simplicity -- though enclosed each of the
+respective modules in its separate namespace. There is only one case when an
+exception was made: the 'main' function and few relatives of it (for example
+the utility class 'options_t' which processes the command line options passed
+along to 'calc' at the moment of its invokation). The modules are as follows:
+
+  Sys   defines utility classes and functions;
+  Base  defines the Base::Parser class;
+  Num   defines the Num::Parser class: the parser of German cardinal numbers;
+  Expr  defines the Expr::Parser class: the parser of arithmetical expressions
+        comprised of both German and literal numerals.
+
+The class 'Base::Parser' is the base of each of the other two parser classes. It
+factors out certain basic behavior needed by 'Num::Parser' and 'Expr::Parser'.
+
+The split of the parsing of German numeral expressions into two specialized and
+separate classes is justified by the way German-Num gradually developed: start
+with the recursive descendent parser and evaluator of arithmetic expressions --
+which is well-known and straightforward to implement -- and, at the next stage,
+develop the grammar and a corresponding parser for German cardinal numerals.
+
+The arithmetic expressions are built upon the usual set of operators: '+', '-',
+'*', '/', '^', '(' and ')'. The file 'expr.g' contains the grammar specification
+of these expressions.
+
+The parser of German numerals is the most contrived part of the program, because
+I have had to define (actually invent) -- based upon a set of use cases [1] --
+an encompassing grammar. Look upon my result in 'num.g'. The descendent parsing
+implemented by the class 'Num::Parser' follows closely the set of rules defined
+in 'num.g'.
+
+
+5. References
+=============
+
+[1] German Numerals
+    http://www.unilang.org/wiki/index.php/German_numerals
+
+[2] German Numbers: Counting in German
+    http://german.about.com/library/blzahlen.htm
+    http://german.about.com/library/blzahlen2.htm
+
+

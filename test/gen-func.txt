@@ -1,0 +1,56 @@
+a
+a a
+a aa b
+a ab
+a ab abc
+a ab abc abcd
+a ab abc abcd abc$'\xfa'
+a ab abc abd ac
+a ab ac
+a ab ac acd
+a ab ac ad
+a abcd abcdefg abcdxyz h hijk
+a abcd abcdefg abcdxyz h hijk hlm
+a abcd abcdefg h hijk
+a abd ac
+a b
+a b abc bac abd
+a b bb
+a b bb cc ccc ddd dddd
+a b c
+a bb ba c
+a bb ba cc
+a bb ba ccc
+a bb ba cde
+a bb ba cdef
+a bb ba cdef cdefg
+a bb bac cdef
+a bb ccc
+a bbx ba ccc
+a bbx bay ccc
+a cde cdef
+a cde cdef cdefg
+a cde cdef cdefgh
+a cdef cdefg
+aa bb
+ab
+ab bb ba ccc
+ab bb ba cde
+ab bbx ba ccc
+ab c
+abc abd acde
+abc abd acde ac
+abc abd acde acfg
+abc bb ba ccc
+abcd abde abef
+ac ab
+cde cdef cdefgh
+cde cfg cfgx cfgxy cfgxyz cfgxzzz
+cdef cdefg
+cdex cdfy cdgz cdhw
+ce cdex cdfy cdgz cdhw
+cge cfg cfgx cfgxy cfgxyz cfgxzzz
+pot potato pottery tattoo tempo
+test
+test tests
+test-str test-string test-int test-float

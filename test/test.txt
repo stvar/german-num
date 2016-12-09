@@ -1,0 +1,3706 @@
+# Copyright (C) 2016  Stefan Vargyas
+# 
+# This file is part of German-Num.
+# 
+# German-Num is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# German-Num is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with German-Num.  If not, see <http://www.gnu.org/licenses/>.
+
+#
+# calc test suite
+#
+$ . ~/regtest2.sh
+$ alias regtest='regtest2-selftest -f test.txt -B'
+
+# list all available tests:
+$ regtest -N
+prereq
+help
+gen-func
+gen-func-ex
+lookup-token
+num-set
+empty
+space
+space2
+tail-char
+eins
+neun
+calc
+
+# run all tests:
+$ regtest -A
+
+--[ prereq ]-------------------------------------------------------------------
+
+$ test -x ./calc
+$
+
+--[ help ]---------------------------------------------------------------------
+
+$ ./calc --help
+usage: calc [OPTION|INPUT]...
+the options are:
+  -i|--interact-input  input type: interactive
+  -a|--args-input      input type: command line arguments (default)
+  -N|--numeral-parser  parser type: numeral
+  -E|--expr-parser     parser type: expression (default)
+  -s|--free-spaces     let spaces be free separating numeral tokens
+     --no-free-spaces  or otherwise do not (default)
+  -d|--debug           print some debugging output
+  -D|--no-debug        do not print debugging output (default)
+     --dump-options    print options and exit
+  -V|--verbose         be verbose
+  -v|--version         print version numbers and exit
+  -?|--help            display this help info and exit
+$
+
+--[ gen-func ]-----------------------------------------------------------------
+
+$ shopt -s extglob
+$ . ../src/commands.sh
+$ gen-func() { printf '%s\n' "$@"|calc-gen-func; }
+$ gen-func a ab
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a[b]
+	if (*n ++ == 'a') {
+		const char* p = n;
+		if (*n ++ == 'b') {
+			r = n;
+			t = token_t::ab;
+			return true;
+		}
+		else {
+			r = p;
+			t = token_t::a;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func a ab b
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a[b]|b
+	switch (*n ++) {
+	case 'a': {
+		const char* p = n;
+		if (*n ++ == 'b') {
+			r = n;
+			t = token_t::ab;
+			return true;
+		}
+		else {
+			r = p;
+			t = token_t::a;
+			return true;
+		}
+	}
+	case 'b':
+		r = n;
+		t = token_t::b;
+		return true;
+	}
+	return false;
+}
+$ gen-func ab ac
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a(b|c)
+	if (*n ++ == 'a') {
+		switch (*n ++) {
+		case 'b':
+			r = n;
+			t = token_t::ab;
+			return true;
+		case 'c':
+			r = n;
+			t = token_t::ac;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func a ab ac
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a[b|c]
+	if (*n ++ == 'a') {
+		const char* p = n;
+		switch (*n ++) {
+		case 'b':
+			r = n;
+			t = token_t::ab;
+			return true;
+		case 'c':
+			r = n;
+			t = token_t::ac;
+			return true;
+		default:
+			r = p;
+			t = token_t::a;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func abc abcz abd abdz abe abez 
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: ab(c[z]|d[z]|e[z])
+	if (*n ++ == 'a' &&
+		*n ++ == 'b') {
+		switch (*n ++) {
+		case 'c': {
+			const char* p = n;
+			if (*n ++ == 'z') {
+				r = n;
+				t = token_t::abcz;
+				return true;
+			}
+			else {
+				r = p;
+				t = token_t::abc;
+				return true;
+			}
+		}
+		case 'd': {
+			const char* p = n;
+			if (*n ++ == 'z') {
+				r = n;
+				t = token_t::abdz;
+				return true;
+			}
+			else {
+				r = p;
+				t = token_t::abd;
+				return true;
+			}
+		}
+		case 'e':
+			const char* p = n;
+			if (*n ++ == 'z') {
+				r = n;
+				t = token_t::abez;
+				return true;
+			}
+			else {
+				r = p;
+				t = token_t::abe;
+				return true;
+			}
+		}
+	}
+	return false;
+}
+$ gen-func ab abc abce abd abdz abe abez
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: ab[c[e]|d[z]|e[z]]
+	if (*n ++ == 'a' &&
+		*n ++ == 'b') {
+		const char* p = n;
+		switch (*n ++) {
+		case 'c': {
+			const char* p = n;
+			if (*n ++ == 'e') {
+				r = n;
+				t = token_t::abce;
+				return true;
+			}
+			else {
+				r = p;
+				t = token_t::abc;
+				return true;
+			}
+		}
+		case 'd': {
+			const char* p = n;
+			if (*n ++ == 'z') {
+				r = n;
+				t = token_t::abdz;
+				return true;
+			}
+			else {
+				r = p;
+				t = token_t::abd;
+				return true;
+			}
+		}
+		case 'e': {
+			const char* p = n;
+			if (*n ++ == 'z') {
+				r = n;
+				t = token_t::abez;
+				return true;
+			}
+			else {
+				r = p;
+				t = token_t::abe;
+				return true;
+			}
+		}
+		default:
+			r = p;
+			t = token_t::ab;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func abc abce abcef abcf abd
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: ab(c[e[f]|f]|d)
+	if (*n ++ == 'a' &&
+		*n ++ == 'b') {
+		switch (*n ++) {
+		case 'c': {
+			const char* p = n;
+			switch (*n ++) {
+			case 'e': {
+				const char* p = n;
+				if (*n ++ == 'f') {
+					r = n;
+					t = token_t::abcef;
+					return true;
+				}
+				else {
+					r = p;
+					t = token_t::abce;
+					return true;
+				}
+			}
+			case 'f':
+				r = n;
+				t = token_t::abcf;
+				return true;
+			default:
+				r = p;
+				t = token_t::abc;
+				return true;
+			}
+		}
+		case 'd':
+			r = n;
+			t = token_t::abd;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func abc abce abcef abcf abcfg abd
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: ab(c[e[f]|f[g]]|d)
+	if (*n ++ == 'a' &&
+		*n ++ == 'b') {
+		switch (*n ++) {
+		case 'c': {
+			const char* p = n;
+			switch (*n ++) {
+			case 'e': {
+				const char* p = n;
+				if (*n ++ == 'f') {
+					r = n;
+					t = token_t::abcef;
+					return true;
+				}
+				else {
+					r = p;
+					t = token_t::abce;
+					return true;
+				}
+			}
+			case 'f': {
+				const char* p = n;
+				if (*n ++ == 'g') {
+					r = n;
+					t = token_t::abcfg;
+					return true;
+				}
+				else {
+					r = p;
+					t = token_t::abcf;
+					return true;
+				}
+			}
+			default:
+				r = p;
+				t = token_t::abc;
+				return true;
+			}
+		}
+		case 'd':
+			r = n;
+			t = token_t::abd;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func abc abce abcef abcf abcfg abcfgh abcfgi abd
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: ab(c[e[f]|f[g[h|i]]]|d)
+	if (*n ++ == 'a' &&
+		*n ++ == 'b') {
+		switch (*n ++) {
+		case 'c': {
+			const char* p = n;
+			switch (*n ++) {
+			case 'e': {
+				const char* p = n;
+				if (*n ++ == 'f') {
+					r = n;
+					t = token_t::abcef;
+					return true;
+				}
+				else {
+					r = p;
+					t = token_t::abce;
+					return true;
+				}
+			}
+			case 'f': {
+				const char* p = n;
+				if (*n ++ == 'g') {
+					const char* p = n;
+					switch (*n ++) {
+					case 'h':
+						r = n;
+						t = token_t::abcfgh;
+						return true;
+					case 'i':
+						r = n;
+						t = token_t::abcfgi;
+						return true;
+					default:
+						r = p;
+						t = token_t::abcfg;
+						return true;
+					}
+				}
+				else {
+					r = p;
+					t = token_t::abcf;
+					return true;
+				}
+			}
+			default:
+				r = p;
+				t = token_t::abc;
+				return true;
+			}
+		}
+		case 'd':
+			r = n;
+			t = token_t::abd;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func abc abce abcef abcf abcfgh abcfgi abd
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: ab(c[e[f]|f[g(h|i)]]|d)
+	if (*n ++ == 'a' &&
+		*n ++ == 'b') {
+		switch (*n ++) {
+		case 'c': {
+			const char* p = n;
+			switch (*n ++) {
+			case 'e': {
+				const char* p = n;
+				if (*n ++ == 'f') {
+					r = n;
+					t = token_t::abcef;
+					return true;
+				}
+				else {
+					r = p;
+					t = token_t::abce;
+					return true;
+				}
+			}
+			case 'f': {
+				const char* p = n;
+				if (*n ++ == 'g') {
+					switch (*n ++) {
+					case 'h':
+						r = n;
+						t = token_t::abcfgh;
+						return true;
+					case 'i':
+						r = n;
+						t = token_t::abcfgi;
+						return true;
+					}
+					return false;
+				}
+				else {
+					r = p;
+					t = token_t::abcf;
+					return true;
+				}
+			}
+			default:
+				r = p;
+				t = token_t::abc;
+				return true;
+			}
+		}
+		case 'd':
+			r = n;
+			t = token_t::abd;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func a ab acd ace
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a[b|c(d|e)]
+	if (*n ++ == 'a') {
+		const char* p = n;
+		switch (*n ++) {
+		case 'b':
+			r = n;
+			t = token_t::ab;
+			return true;
+		case 'c':
+			switch (*n ++) {
+			case 'd':
+				r = n;
+				t = token_t::acd;
+				return true;
+			case 'e':
+				r = n;
+				t = token_t::ace;
+				return true;
+			}
+			return false;
+		default:
+			r = p;
+			t = token_t::a;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func abcd abce ac
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a(bc(d|e)|c)
+	if (*n ++ == 'a') {
+		switch (*n ++) {
+		case 'b':
+			if (*n ++ == 'c') {
+				switch (*n ++) {
+				case 'd':
+					r = n;
+					t = token_t::abcd;
+					return true;
+				case 'e':
+					r = n;
+					t = token_t::abce;
+					return true;
+				}
+			}
+			return false;
+		case 'c':
+			r = n;
+			t = token_t::ac;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func abc abd ac
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a(b(c|d)|c)
+	if (*n ++ == 'a') {
+		switch (*n ++) {
+		case 'b':
+			switch (*n ++) {
+			case 'c':
+				r = n;
+				t = token_t::abc;
+				return true;
+			case 'd':
+				r = n;
+				t = token_t::abd;
+				return true;
+			}
+			return false;
+		case 'c':
+			r = n;
+			t = token_t::ac;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func a abc abd ac
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a[b(c|d)|c]
+	if (*n ++ == 'a') {
+		const char* p = n;
+		switch (*n ++) {
+		case 'b':
+			switch (*n ++) {
+			case 'c':
+				r = n;
+				t = token_t::abc;
+				return true;
+			case 'd':
+				r = n;
+				t = token_t::abd;
+				return true;
+			}
+			return false;
+		case 'c':
+			r = n;
+			t = token_t::ac;
+			return true;
+		default:
+			r = p;
+			t = token_t::a;
+			return true;
+		}
+	}
+	return false;
+}
+$
+
+--[ gen-func-ex ]--------------------------------------------------------------
+
+$ shopt -s extglob
+$ . ../src/commands.sh
+$ gen-func() { printf '%s\n' "$@"|calc-gen-func; }
+# $ cat gen-func.txt|while read -r a; do c="gen-func $a"; echo "$ $c"; eval "$c"; done
+$ gen-func a
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a
+	if (*n ++ == 'a') {
+		r = n;
+		t = token_t::a;
+		return true;
+	}
+	return false;
+}
+$ gen-func a a
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a
+	if (*n ++ == 'a') {
+		r = n;
+		t = token_t::a;
+		return true;
+	}
+	return false;
+}
+$ gen-func a aa b
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a[a]|b
+	switch (*n ++) {
+	case 'a': {
+		const char* p = n;
+		if (*n ++ == 'a') {
+			r = n;
+			t = token_t::aa;
+			return true;
+		}
+		else {
+			r = p;
+			t = token_t::a;
+			return true;
+		}
+	}
+	case 'b':
+		r = n;
+		t = token_t::b;
+		return true;
+	}
+	return false;
+}
+$ gen-func a ab
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a[b]
+	if (*n ++ == 'a') {
+		const char* p = n;
+		if (*n ++ == 'b') {
+			r = n;
+			t = token_t::ab;
+			return true;
+		}
+		else {
+			r = p;
+			t = token_t::a;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func a ab abc
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a[b[c]]
+	if (*n ++ == 'a') {
+		const char* p = n;
+		if (*n ++ == 'b') {
+			const char* p = n;
+			if (*n ++ == 'c') {
+				r = n;
+				t = token_t::abc;
+				return true;
+			}
+			else {
+				r = p;
+				t = token_t::ab;
+				return true;
+			}
+		}
+		else {
+			r = p;
+			t = token_t::a;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func a ab abc abcd
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a[b[c[d]]]
+	if (*n ++ == 'a') {
+		const char* p = n;
+		if (*n ++ == 'b') {
+			const char* p = n;
+			if (*n ++ == 'c') {
+				const char* p = n;
+				if (*n ++ == 'd') {
+					r = n;
+					t = token_t::abcd;
+					return true;
+				}
+				else {
+					r = p;
+					t = token_t::abc;
+					return true;
+				}
+			}
+			else {
+				r = p;
+				t = token_t::ab;
+				return true;
+			}
+			return false;
+		}
+		else {
+			r = p;
+			t = token_t::a;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func a ab abc abcd abc$'\xfa'
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a[b[c[dú|]]]
+	if (*n ++ == 'a') {
+		const char* p = n;
+		if (*n ++ == 'b') {
+			const char* p = n;
+			if (*n ++ == 'c') {
+				const char* p = n;
+				switch (*n ++) {
+				case 'd':
+					r = n;
+					t = token_t::abcd;
+					return true;
+				case '\xfa':
+					if (*n == 0) {
+						return "abc\xfa";
+					return false;
+				default:
+					r = p;
+					t = token_t::abc;
+					return true;
+				}
+			}
+			else {
+				r = p;
+				t = token_t::ab;
+				return true;
+			}
+		}
+		else {
+			r = p;
+			t = token_t::a;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func a ab abc abd ac
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a[b[c|d]|c]
+	if (*n ++ == 'a') {
+		const char* p = n;
+		switch (*n ++) {
+		case 'b': {
+			const char* p = n;
+			switch (*n ++) {
+			case 'c':
+				r = n;
+				t = token_t::abc;
+				return true;
+			case 'd':
+				r = n;
+				t = token_t::abd;
+				return true;
+			default:
+				r = p;
+				t = token_t::ab;
+				return true;
+			}
+		}
+		case 'c':
+			r = n;
+			t = token_t::ac;
+			return true;
+		default:
+			r = p;
+			t = token_t::a;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func a ab ac
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a[b|c]
+	if (*n ++ == 'a') {
+		const char* p = n;
+		switch (*n ++) {
+		case 'b':
+			r = n;
+			t = token_t::ab;
+			return true;
+		case 'c':
+			r = n;
+			t = token_t::ac;
+			return true;
+		default:
+			r = p;
+			t = token_t::a;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func a ab ac acd
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a[b|c[d]]
+	if (*n ++ == 'a') {
+		const char* p = n;
+		switch (*n ++) {
+		case 'b':
+			r = n;
+			t = token_t::ab;
+			return true;
+		case 'c': {
+			const char* p = n;
+			if (*n ++ == 'd') {
+				r = n;
+				t = token_t::acd;
+				return true;
+			}
+			else {
+				r = p;
+				t = token_t::ac;
+				return true;
+			}
+		}
+		default:
+			r = p;
+			t = token_t::a;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func a ab ac ad
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a[b|c|d]
+	if (*n ++ == 'a') {
+		const char* p = n;
+		switch (*n ++) {
+		case 'b':
+			r = n;
+			t = token_t::ab;
+			return true;
+		case 'c':
+			r = n;
+			t = token_t::ac;
+			return true;
+		case 'd':
+			r = n;
+			t = token_t::ad;
+			return true;
+		default:
+			r = p;
+			t = token_t::a;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func a abcd abcdefg abcdxyz h hijk
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a[bcd[efg|xyz]]|h[ijk]
+	switch (*n ++) {
+	case 'a': {
+		const char* p = n;
+		if (*n ++ == 'b' &&
+			*n ++ == 'c' &&
+			*n ++ == 'd') {
+			const char* p = n;
+			switch (*n ++) {
+			case 'e':
+				if (*n ++ == 'f' &&
+					*n ++ == 'g') {
+					r = n;
+					t = token_t::abcdefg;
+					return true;
+				}
+				return false;
+			case 'x':
+				if (*n ++ == 'y' &&
+					*n ++ == 'z') {
+					r = n;
+					t = token_t::abcdxyz;
+					return true;
+				}
+				return false;
+			default:
+				r = p;
+				t = token_t::abcd;
+				return true;
+			}
+		}
+		else {
+			r = p;
+			t = token_t::a;
+			return true;
+		}
+	}
+	case 'h':
+		const char* p = n;
+		if (*n ++ == 'i' &&
+			*n ++ == 'j' &&
+			*n ++ == 'k') {
+			r = n;
+			t = token_t::hijk;
+			return true;
+		}
+		else {
+			r = p;
+			t = token_t::h;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func a abcd abcdefg abcdxyz h hijk hlm
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a[bcd[efg|xyz]]|h[ijk|lm]
+	switch (*n ++) {
+	case 'a': {
+		const char* p = n;
+		if (*n ++ == 'b' &&
+			*n ++ == 'c' &&
+			*n ++ == 'd') {
+			const char* p = n;
+			switch (*n ++) {
+			case 'e':
+				if (*n ++ == 'f' &&
+					*n ++ == 'g') {
+					r = n;
+					t = token_t::abcdefg;
+					return true;
+				}
+				return false;
+			case 'x':
+				if (*n ++ == 'y' &&
+					*n ++ == 'z') {
+					r = n;
+					t = token_t::abcdxyz;
+					return true;
+				}
+				return false;
+			default:
+				r = p;
+				t = token_t::abcd;
+				return true;
+			}
+		}
+		else {
+			r = p;
+			t = token_t::a;
+			return true;
+		}
+	}
+	case 'h':
+		const char* p = n;
+		switch (*n ++) {
+		case 'i':
+			if (*n ++ == 'j' &&
+				*n ++ == 'k') {
+				r = n;
+				t = token_t::hijk;
+				return true;
+			}
+			return false;
+		case 'l':
+			if (*n ++ == 'm') {
+				r = n;
+				t = token_t::hlm;
+				return true;
+			}
+			return false;
+		default:
+			r = p;
+			t = token_t::h;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func a abcd abcdefg h hijk
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a[bcd[efg]]|h[ijk]
+	switch (*n ++) {
+	case 'a': {
+		const char* p = n;
+		if (*n ++ == 'b' &&
+			*n ++ == 'c' &&
+			*n ++ == 'd') {
+			const char* p = n;
+			if (*n ++ == 'e' &&
+				*n ++ == 'f' &&
+				*n ++ == 'g') {
+				r = n;
+				t = token_t::abcdefg;
+				return true;
+			}
+			else {
+				r = p;
+				t = token_t::abcd;
+				return true;
+			}
+		}
+		else {
+			r = p;
+			t = token_t::a;
+			return true;
+		}
+		return false;
+	}
+	case 'h':
+		const char* p = n;
+		if (*n ++ == 'i' &&
+			*n ++ == 'j' &&
+			*n ++ == 'k') {
+			r = n;
+			t = token_t::hijk;
+			return true;
+		}
+		else {
+			r = p;
+			t = token_t::h;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func a abd ac
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a[bd|c]
+	if (*n ++ == 'a') {
+		const char* p = n;
+		switch (*n ++) {
+		case 'b':
+			if (*n ++ == 'd') {
+				r = n;
+				t = token_t::abd;
+				return true;
+			}
+			return false;
+		case 'c':
+			r = n;
+			t = token_t::ac;
+			return true;
+		default:
+			r = p;
+			t = token_t::a;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func a b
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a|b
+	switch (*n ++) {
+	case 'a':
+		r = n;
+		t = token_t::a;
+		return true;
+	case 'b':
+		r = n;
+		t = token_t::b;
+		return true;
+	}
+	return false;
+}
+$ gen-func a b abc bac abd
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a[b(c|d)]|b[ac]
+	switch (*n ++) {
+	case 'a': {
+		const char* p = n;
+		if (*n ++ == 'b') {
+			switch (*n ++) {
+			case 'c':
+				r = n;
+				t = token_t::abc;
+				return true;
+			case 'd':
+				r = n;
+				t = token_t::abd;
+				return true;
+			}
+			return false;
+		}
+		else {
+			r = p;
+			t = token_t::a;
+			return true;
+		}
+	}
+	case 'b':
+		const char* p = n;
+		if (*n ++ == 'a' &&
+			*n ++ == 'c') {
+			r = n;
+			t = token_t::bac;
+			return true;
+		}
+		else {
+			r = p;
+			t = token_t::b;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func a b bb
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a|b[b]
+	switch (*n ++) {
+	case 'a':
+		r = n;
+		t = token_t::a;
+		return true;
+	case 'b':
+		const char* p = n;
+		if (*n ++ == 'b') {
+			r = n;
+			t = token_t::bb;
+			return true;
+		}
+		else {
+			r = p;
+			t = token_t::b;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func a b bb cc ccc ddd dddd
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a|b[b]|cc[c]|ddd[d]
+	switch (*n ++) {
+	case 'a':
+		r = n;
+		t = token_t::a;
+		return true;
+	case 'b': {
+		const char* p = n;
+		if (*n ++ == 'b') {
+			r = n;
+			t = token_t::bb;
+			return true;
+		}
+		else {
+			r = p;
+			t = token_t::b;
+			return true;
+		}
+	}
+	case 'c':
+		if (*n ++ == 'c') {
+			const char* p = n;
+			if (*n ++ == 'c') {
+				r = n;
+				t = token_t::ccc;
+				return true;
+			}
+			else {
+				r = p;
+				t = token_t::cc;
+				return true;
+			}
+		}
+		return false;
+	case 'd':
+		if (*n ++ == 'd' &&
+			*n ++ == 'd') {
+			const char* p = n;
+			if (*n ++ == 'd') {
+				r = n;
+				t = token_t::dddd;
+				return true;
+			}
+			else {
+				r = p;
+				t = token_t::ddd;
+				return true;
+			}
+		}
+	}
+	return false;
+}
+$ gen-func a b c
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a|b|c
+	switch (*n ++) {
+	case 'a':
+		r = n;
+		t = token_t::a;
+		return true;
+	case 'b':
+		r = n;
+		t = token_t::b;
+		return true;
+	case 'c':
+		r = n;
+		t = token_t::c;
+		return true;
+	}
+	return false;
+}
+$ gen-func a bb ba c
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a|b(a|b)|c
+	switch (*n ++) {
+	case 'a':
+		r = n;
+		t = token_t::a;
+		return true;
+	case 'b':
+		switch (*n ++) {
+		case 'a':
+			r = n;
+			t = token_t::ba;
+			return true;
+		case 'b':
+			r = n;
+			t = token_t::bb;
+			return true;
+		}
+		return false;
+	case 'c':
+		r = n;
+		t = token_t::c;
+		return true;
+	}
+	return false;
+}
+$ gen-func a bb ba cc
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a|b(a|b)|cc
+	switch (*n ++) {
+	case 'a':
+		r = n;
+		t = token_t::a;
+		return true;
+	case 'b':
+		switch (*n ++) {
+		case 'a':
+			r = n;
+			t = token_t::ba;
+			return true;
+		case 'b':
+			r = n;
+			t = token_t::bb;
+			return true;
+		}
+		return false;
+	case 'c':
+		if (*n ++ == 'c') {
+			r = n;
+			t = token_t::cc;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func a bb ba ccc
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a|b(a|b)|ccc
+	switch (*n ++) {
+	case 'a':
+		r = n;
+		t = token_t::a;
+		return true;
+	case 'b':
+		switch (*n ++) {
+		case 'a':
+			r = n;
+			t = token_t::ba;
+			return true;
+		case 'b':
+			r = n;
+			t = token_t::bb;
+			return true;
+		}
+		return false;
+	case 'c':
+		if (*n ++ == 'c' &&
+			*n ++ == 'c') {
+			r = n;
+			t = token_t::ccc;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func a bb ba cde
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a|b(a|b)|cde
+	switch (*n ++) {
+	case 'a':
+		r = n;
+		t = token_t::a;
+		return true;
+	case 'b':
+		switch (*n ++) {
+		case 'a':
+			r = n;
+			t = token_t::ba;
+			return true;
+		case 'b':
+			r = n;
+			t = token_t::bb;
+			return true;
+		}
+		return false;
+	case 'c':
+		if (*n ++ == 'd' &&
+			*n ++ == 'e') {
+			r = n;
+			t = token_t::cde;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func a bb ba cdef
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a|b(a|b)|cdef
+	switch (*n ++) {
+	case 'a':
+		r = n;
+		t = token_t::a;
+		return true;
+	case 'b':
+		switch (*n ++) {
+		case 'a':
+			r = n;
+			t = token_t::ba;
+			return true;
+		case 'b':
+			r = n;
+			t = token_t::bb;
+			return true;
+		}
+		return false;
+	case 'c':
+		if (*n ++ == 'd' &&
+			*n ++ == 'e' &&
+			*n ++ == 'f') {
+			r = n;
+			t = token_t::cdef;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func a bb ba cdef cdefg
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a|b(a|b)|cdef[g]
+	switch (*n ++) {
+	case 'a':
+		r = n;
+		t = token_t::a;
+		return true;
+	case 'b':
+		switch (*n ++) {
+		case 'a':
+			r = n;
+			t = token_t::ba;
+			return true;
+		case 'b':
+			r = n;
+			t = token_t::bb;
+			return true;
+		}
+		return false;
+	case 'c':
+		if (*n ++ == 'd' &&
+			*n ++ == 'e' &&
+			*n ++ == 'f') {
+			const char* p = n;
+			if (*n ++ == 'g') {
+				r = n;
+				t = token_t::cdefg;
+				return true;
+			}
+			else {
+				r = p;
+				t = token_t::cdef;
+				return true;
+			}
+		}
+	}
+	return false;
+}
+$ gen-func a bb bac cdef
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a|b(ac|b)|cdef
+	switch (*n ++) {
+	case 'a':
+		r = n;
+		t = token_t::a;
+		return true;
+	case 'b':
+		switch (*n ++) {
+		case 'a':
+			if (*n ++ == 'c') {
+				r = n;
+				t = token_t::bac;
+				return true;
+			}
+			return false;
+		case 'b':
+			r = n;
+			t = token_t::bb;
+			return true;
+		}
+		return false;
+	case 'c':
+		if (*n ++ == 'd' &&
+			*n ++ == 'e' &&
+			*n ++ == 'f') {
+			r = n;
+			t = token_t::cdef;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func a bb ccc
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a|bb|ccc
+	switch (*n ++) {
+	case 'a':
+		r = n;
+		t = token_t::a;
+		return true;
+	case 'b':
+		if (*n ++ == 'b') {
+			r = n;
+			t = token_t::bb;
+			return true;
+		}
+		return false;
+	case 'c':
+		if (*n ++ == 'c' &&
+			*n ++ == 'c') {
+			r = n;
+			t = token_t::ccc;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func a bbx ba ccc
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a|b(a|bx)|ccc
+	switch (*n ++) {
+	case 'a':
+		r = n;
+		t = token_t::a;
+		return true;
+	case 'b':
+		switch (*n ++) {
+		case 'a':
+			r = n;
+			t = token_t::ba;
+			return true;
+		case 'b':
+			if (*n ++ == 'x') {
+				r = n;
+				t = token_t::bbx;
+				return true;
+			}
+		}
+		return false;
+	case 'c':
+		if (*n ++ == 'c' &&
+			*n ++ == 'c') {
+			r = n;
+			t = token_t::ccc;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func a bbx bay ccc
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a|b(ay|bx)|ccc
+	switch (*n ++) {
+	case 'a':
+		r = n;
+		t = token_t::a;
+		return true;
+	case 'b':
+		switch (*n ++) {
+		case 'a':
+			if (*n ++ == 'y') {
+				r = n;
+				t = token_t::bay;
+				return true;
+			}
+			return false;
+		case 'b':
+			if (*n ++ == 'x') {
+				r = n;
+				t = token_t::bbx;
+				return true;
+			}
+		}
+		return false;
+	case 'c':
+		if (*n ++ == 'c' &&
+			*n ++ == 'c') {
+			r = n;
+			t = token_t::ccc;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func a cde cdef
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a|cde[f]
+	switch (*n ++) {
+	case 'a':
+		r = n;
+		t = token_t::a;
+		return true;
+	case 'c':
+		if (*n ++ == 'd' &&
+			*n ++ == 'e') {
+			const char* p = n;
+			if (*n ++ == 'f') {
+				r = n;
+				t = token_t::cdef;
+				return true;
+			}
+			else {
+				r = p;
+				t = token_t::cde;
+				return true;
+			}
+		}
+	}
+	return false;
+}
+$ gen-func a cde cdef cdefg
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a|cde[f[g]]
+	switch (*n ++) {
+	case 'a':
+		r = n;
+		t = token_t::a;
+		return true;
+	case 'c':
+		if (*n ++ == 'd' &&
+			*n ++ == 'e') {
+			const char* p = n;
+			if (*n ++ == 'f') {
+				const char* p = n;
+				if (*n ++ == 'g') {
+					r = n;
+					t = token_t::cdefg;
+					return true;
+				}
+				else {
+					r = p;
+					t = token_t::cdef;
+					return true;
+				}
+			}
+			else {
+				r = p;
+				t = token_t::cde;
+				return true;
+			}
+		}
+	}
+	return false;
+}
+$ gen-func a cde cdef cdefgh
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a|cde[f[gh]]
+	switch (*n ++) {
+	case 'a':
+		r = n;
+		t = token_t::a;
+		return true;
+	case 'c':
+		if (*n ++ == 'd' &&
+			*n ++ == 'e') {
+			const char* p = n;
+			if (*n ++ == 'f') {
+				const char* p = n;
+				if (*n ++ == 'g' &&
+					*n ++ == 'h') {
+					r = n;
+					t = token_t::cdefgh;
+					return true;
+				}
+				else {
+					r = p;
+					t = token_t::cdef;
+					return true;
+				}
+			}
+			else {
+				r = p;
+				t = token_t::cde;
+				return true;
+			}
+		}
+	}
+	return false;
+}
+$ gen-func a cdef cdefg
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a|cdef[g]
+	switch (*n ++) {
+	case 'a':
+		r = n;
+		t = token_t::a;
+		return true;
+	case 'c':
+		if (*n ++ == 'd' &&
+			*n ++ == 'e' &&
+			*n ++ == 'f') {
+			const char* p = n;
+			if (*n ++ == 'g') {
+				r = n;
+				t = token_t::cdefg;
+				return true;
+			}
+			else {
+				r = p;
+				t = token_t::cdef;
+				return true;
+			}
+		}
+	}
+	return false;
+}
+$ gen-func aa bb
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: aa|bb
+	switch (*n ++) {
+	case 'a':
+		if (*n ++ == 'a') {
+			r = n;
+			t = token_t::aa;
+			return true;
+		}
+		return false;
+	case 'b':
+		if (*n ++ == 'b') {
+			r = n;
+			t = token_t::bb;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func ab
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: ab
+	if (*n ++ == 'a' &&
+		*n ++ == 'b') {
+		r = n;
+		t = token_t::ab;
+		return true;
+	}
+	return false;
+}
+$ gen-func ab bb ba ccc
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: ab|b(a|b)|ccc
+	switch (*n ++) {
+	case 'a':
+		if (*n ++ == 'b') {
+			r = n;
+			t = token_t::ab;
+			return true;
+		}
+		return false;
+	case 'b':
+		switch (*n ++) {
+		case 'a':
+			r = n;
+			t = token_t::ba;
+			return true;
+		case 'b':
+			r = n;
+			t = token_t::bb;
+			return true;
+		}
+		return false;
+	case 'c':
+		if (*n ++ == 'c' &&
+			*n ++ == 'c') {
+			r = n;
+			t = token_t::ccc;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func ab bb ba cde
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: ab|b(a|b)|cde
+	switch (*n ++) {
+	case 'a':
+		if (*n ++ == 'b') {
+			r = n;
+			t = token_t::ab;
+			return true;
+		}
+		return false;
+	case 'b':
+		switch (*n ++) {
+		case 'a':
+			r = n;
+			t = token_t::ba;
+			return true;
+		case 'b':
+			r = n;
+			t = token_t::bb;
+			return true;
+		}
+		return false;
+	case 'c':
+		if (*n ++ == 'd' &&
+			*n ++ == 'e') {
+			r = n;
+			t = token_t::cde;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func ab bbx ba ccc
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: ab|b(a|bx)|ccc
+	switch (*n ++) {
+	case 'a':
+		if (*n ++ == 'b') {
+			r = n;
+			t = token_t::ab;
+			return true;
+		}
+		return false;
+	case 'b':
+		switch (*n ++) {
+		case 'a':
+			r = n;
+			t = token_t::ba;
+			return true;
+		case 'b':
+			if (*n ++ == 'x') {
+				r = n;
+				t = token_t::bbx;
+				return true;
+			}
+		}
+		return false;
+	case 'c':
+		if (*n ++ == 'c' &&
+			*n ++ == 'c') {
+			r = n;
+			t = token_t::ccc;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func ab c
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: ab|c
+	switch (*n ++) {
+	case 'a':
+		if (*n ++ == 'b') {
+			r = n;
+			t = token_t::ab;
+			return true;
+		}
+		return false;
+	case 'c':
+		r = n;
+		t = token_t::c;
+		return true;
+	}
+	return false;
+}
+$ gen-func abc abd acde
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a(b(c|d)|cde)
+	if (*n ++ == 'a') {
+		switch (*n ++) {
+		case 'b':
+			switch (*n ++) {
+			case 'c':
+				r = n;
+				t = token_t::abc;
+				return true;
+			case 'd':
+				r = n;
+				t = token_t::abd;
+				return true;
+			}
+			return false;
+		case 'c':
+			if (*n ++ == 'd' &&
+				*n ++ == 'e') {
+				r = n;
+				t = token_t::acde;
+				return true;
+			}
+		}
+	}
+	return false;
+}
+$ gen-func abc abd acde ac
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a(b(c|d)|c[de])
+	if (*n ++ == 'a') {
+		switch (*n ++) {
+		case 'b':
+			switch (*n ++) {
+			case 'c':
+				r = n;
+				t = token_t::abc;
+				return true;
+			case 'd':
+				r = n;
+				t = token_t::abd;
+				return true;
+			}
+			return false;
+		case 'c':
+			const char* p = n;
+			if (*n ++ == 'd' &&
+				*n ++ == 'e') {
+				r = n;
+				t = token_t::acde;
+				return true;
+			}
+			else {
+				r = p;
+				t = token_t::ac;
+				return true;
+			}
+		}
+	}
+	return false;
+}
+$ gen-func abc abd acde acfg
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a(b(c|d)|c(de|fg))
+	if (*n ++ == 'a') {
+		switch (*n ++) {
+		case 'b':
+			switch (*n ++) {
+			case 'c':
+				r = n;
+				t = token_t::abc;
+				return true;
+			case 'd':
+				r = n;
+				t = token_t::abd;
+				return true;
+			}
+			return false;
+		case 'c':
+			switch (*n ++) {
+			case 'd':
+				if (*n ++ == 'e') {
+					r = n;
+					t = token_t::acde;
+					return true;
+				}
+				return false;
+			case 'f':
+				if (*n ++ == 'g') {
+					r = n;
+					t = token_t::acfg;
+					return true;
+				}
+			}
+		}
+	}
+	return false;
+}
+$ gen-func abc bb ba ccc
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: abc|b(a|b)|ccc
+	switch (*n ++) {
+	case 'a':
+		if (*n ++ == 'b' &&
+			*n ++ == 'c') {
+			r = n;
+			t = token_t::abc;
+			return true;
+		}
+		return false;
+	case 'b':
+		switch (*n ++) {
+		case 'a':
+			r = n;
+			t = token_t::ba;
+			return true;
+		case 'b':
+			r = n;
+			t = token_t::bb;
+			return true;
+		}
+		return false;
+	case 'c':
+		if (*n ++ == 'c' &&
+			*n ++ == 'c') {
+			r = n;
+			t = token_t::ccc;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func abcd abde abef
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: ab(cd|de|ef)
+	if (*n ++ == 'a' &&
+		*n ++ == 'b') {
+		switch (*n ++) {
+		case 'c':
+			if (*n ++ == 'd') {
+				r = n;
+				t = token_t::abcd;
+				return true;
+			}
+			return false;
+		case 'd':
+			if (*n ++ == 'e') {
+				r = n;
+				t = token_t::abde;
+				return true;
+			}
+			return false;
+		case 'e':
+			if (*n ++ == 'f') {
+				r = n;
+				t = token_t::abef;
+				return true;
+			}
+		}
+	}
+	return false;
+}
+$ gen-func ac ab
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: a(b|c)
+	if (*n ++ == 'a') {
+		switch (*n ++) {
+		case 'b':
+			r = n;
+			t = token_t::ab;
+			return true;
+		case 'c':
+			r = n;
+			t = token_t::ac;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func cde cdef cdefgh
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: cde[f[gh]]
+	if (*n ++ == 'c' &&
+		*n ++ == 'd' &&
+		*n ++ == 'e') {
+		const char* p = n;
+		if (*n ++ == 'f') {
+			const char* p = n;
+			if (*n ++ == 'g' &&
+				*n ++ == 'h') {
+				r = n;
+				t = token_t::cdefgh;
+				return true;
+			}
+			else {
+				r = p;
+				t = token_t::cdef;
+				return true;
+			}
+		}
+		else {
+			r = p;
+			t = token_t::cde;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func cde cfg cfgx cfgxy cfgxyz cfgxzzz
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: c(de|fg[x[y[z]|zzz]])
+	if (*n ++ == 'c') {
+		switch (*n ++) {
+		case 'd':
+			if (*n ++ == 'e') {
+				r = n;
+				t = token_t::cde;
+				return true;
+			}
+			return false;
+		case 'f':
+			if (*n ++ == 'g') {
+				const char* p = n;
+				if (*n ++ == 'x') {
+					const char* p = n;
+					switch (*n ++) {
+					case 'y': {
+						const char* p = n;
+						if (*n ++ == 'z') {
+							r = n;
+							t = token_t::cfgxyz;
+							return true;
+						}
+						else {
+							r = p;
+							t = token_t::cfgxy;
+							return true;
+						}
+					}
+					case 'z':
+						if (*n ++ == 'z' &&
+							*n ++ == 'z') {
+							r = n;
+							t = token_t::cfgxzzz;
+							return true;
+						}
+						return false;
+					default:
+						r = p;
+						t = token_t::cfgx;
+						return true;
+					}
+				}
+				else {
+					r = p;
+					t = token_t::cfg;
+					return true;
+				}
+			}
+		}
+	}
+	return false;
+}
+$ gen-func cdef cdefg
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: cdef[g]
+	if (*n ++ == 'c' &&
+		*n ++ == 'd' &&
+		*n ++ == 'e' &&
+		*n ++ == 'f') {
+		const char* p = n;
+		if (*n ++ == 'g') {
+			r = n;
+			t = token_t::cdefg;
+			return true;
+		}
+		else {
+			r = p;
+			t = token_t::cdef;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func cdex cdfy cdgz cdhw
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: cd(ex|fy|gz|hw)
+	if (*n ++ == 'c' &&
+		*n ++ == 'd') {
+		switch (*n ++) {
+		case 'e':
+			if (*n ++ == 'x') {
+				r = n;
+				t = token_t::cdex;
+				return true;
+			}
+			return false;
+		case 'f':
+			if (*n ++ == 'y') {
+				r = n;
+				t = token_t::cdfy;
+				return true;
+			}
+			return false;
+		case 'g':
+			if (*n ++ == 'z') {
+				r = n;
+				t = token_t::cdgz;
+				return true;
+			}
+			return false;
+		case 'h':
+			if (*n ++ == 'w') {
+				r = n;
+				t = token_t::cdhw;
+				return true;
+			}
+		}
+	}
+	return false;
+}
+$ gen-func ce cdex cdfy cdgz cdhw
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: c(d(ex|fy|gz|hw)|e)
+	if (*n ++ == 'c') {
+		switch (*n ++) {
+		case 'd':
+			switch (*n ++) {
+			case 'e':
+				if (*n ++ == 'x') {
+					r = n;
+					t = token_t::cdex;
+					return true;
+				}
+				return false;
+			case 'f':
+				if (*n ++ == 'y') {
+					r = n;
+					t = token_t::cdfy;
+					return true;
+				}
+				return false;
+			case 'g':
+				if (*n ++ == 'z') {
+					r = n;
+					t = token_t::cdgz;
+					return true;
+				}
+				return false;
+			case 'h':
+				if (*n ++ == 'w') {
+					r = n;
+					t = token_t::cdhw;
+					return true;
+				}
+			}
+			return false;
+		case 'e':
+			r = n;
+			t = token_t::ce;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func cge cfg cfgx cfgxy cfgxyz cfgxzzz
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: c(fg[x[y[z]|zzz]]|ge)
+	if (*n ++ == 'c') {
+		switch (*n ++) {
+		case 'f':
+			if (*n ++ == 'g') {
+				const char* p = n;
+				if (*n ++ == 'x') {
+					const char* p = n;
+					switch (*n ++) {
+					case 'y': {
+						const char* p = n;
+						if (*n ++ == 'z') {
+							r = n;
+							t = token_t::cfgxyz;
+							return true;
+						}
+						else {
+							r = p;
+							t = token_t::cfgxy;
+							return true;
+						}
+					}
+					case 'z':
+						if (*n ++ == 'z' &&
+							*n ++ == 'z') {
+							r = n;
+							t = token_t::cfgxzzz;
+							return true;
+						}
+						return false;
+					default:
+						r = p;
+						t = token_t::cfgx;
+						return true;
+					}
+				}
+				else {
+					r = p;
+					t = token_t::cfg;
+					return true;
+				}
+			}
+			return false;
+		case 'g':
+			if (*n ++ == 'e') {
+				r = n;
+				t = token_t::cge;
+				return true;
+			}
+		}
+	}
+	return false;
+}
+$ gen-func pot potato pottery tattoo tempo
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: pot[ato|tery]|t(attoo|empo)
+	switch (*n ++) {
+	case 'p':
+		if (*n ++ == 'o' &&
+			*n ++ == 't') {
+			const char* p = n;
+			switch (*n ++) {
+			case 'a':
+				if (*n ++ == 't' &&
+					*n ++ == 'o') {
+					r = n;
+					t = token_t::potato;
+					return true;
+				}
+				return false;
+			case 't':
+				if (*n ++ == 'e' &&
+					*n ++ == 'r' &&
+					*n ++ == 'y') {
+					r = n;
+					t = token_t::pottery;
+					return true;
+				}
+				return false;
+			default:
+				r = p;
+				t = token_t::pot;
+				return true;
+			}
+		}
+		return false;
+	case 't':
+		switch (*n ++) {
+		case 'a':
+			if (*n ++ == 't' &&
+				*n ++ == 't' &&
+				*n ++ == 'o' &&
+				*n ++ == 'o') {
+				r = n;
+				t = token_t::tattoo;
+				return true;
+			}
+			return false;
+		case 'e':
+			if (*n ++ == 'm' &&
+				*n ++ == 'p' &&
+				*n ++ == 'o') {
+				r = n;
+				t = token_t::tempo;
+				return true;
+			}
+		}
+	}
+	return false;
+}
+$ gen-func test
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: test
+	if (*n ++ == 't' &&
+		*n ++ == 'e' &&
+		*n ++ == 's' &&
+		*n ++ == 't') {
+		r = n;
+		t = token_t::test;
+		return true;
+	}
+	return false;
+}
+$ gen-func test tests
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: test[s]
+	if (*n ++ == 't' &&
+		*n ++ == 'e' &&
+		*n ++ == 's' &&
+		*n ++ == 't') {
+		const char* p = n;
+		if (*n ++ == 's') {
+			r = n;
+			t = token_t::tests;
+			return true;
+		}
+		else {
+			r = p;
+			t = token_t::test;
+			return true;
+		}
+	}
+	return false;
+}
+$ gen-func test-str test-string test-int test-float
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: test-(float|int|str[ing])
+	if (*n ++ == 't' &&
+		*n ++ == 'e' &&
+		*n ++ == 's' &&
+		*n ++ == 't' &&
+		*n ++ == '-') {
+		switch (*n ++) {
+		case 'f':
+			if (*n ++ == 'l' &&
+				*n ++ == 'o' &&
+				*n ++ == 'a' &&
+				*n ++ == 't') {
+				r = n;
+				t = token_t::test-float;
+				return true;
+			}
+			return false;
+		case 'i':
+			if (*n ++ == 'n' &&
+				*n ++ == 't') {
+				r = n;
+				t = token_t::test-int;
+				return true;
+			}
+			return false;
+		case 's':
+			if (*n ++ == 't' &&
+				*n ++ == 'r') {
+				const char* p = n;
+				if (*n ++ == 'i' &&
+					*n ++ == 'n' &&
+					*n ++ == 'g') {
+					r = n;
+					t = token_t::test-string;
+					return true;
+				}
+				else {
+					r = p;
+					t = token_t::test-str;
+					return true;
+				}
+			}
+		}
+	}
+	return false;
+}
+$
+
+--[ lookup-token ]-------------------------------------------------------------
+
+$ cd ../src
+$ shopt -s extglob
+$ . commands.sh
+$ print() { printf '%s\n' "$@"; }
+$ src() { local n="Num"; if [ "$1" == '-n' ]; then n="Num"; shift; elif [ "$1" == '-e' ]; then n="Expr"; shift; else error "invalid arg '$1'"; return 1; fi; local a=''; local p='p'; [ "$1" == '-a' ] && { a='='; p=''; }; ssed -nR '/^\s*namespace\s+'"$n"'\s*\{\s*$/!b;:0;n;/^bool\s+Parser::lookup_token\(/!b0;'"${a:-p}"';:1;n;'"${p:+:2;s/^(\t*)    /\1\t/;t2;$p;}"'/^\}/{'"${a:+$a;}"'q};b1' calc.cpp; }
+$ src -n -a
+1183
+1475
+$ src -e -a
+2375
+2443
+$ calc-token -T -gn|calc-gen-func
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: Billi(arde[n]|on[en])|Milli(arde[n]|on[en])|acht|drei|e(in[e|s]|lf)|fuenf|hundert|n(eun|ull)|s(ech[s]|ieb[en]|sig)|tausend|und|vier|z(ehn|ig|w(an|ei|oelf))
+	switch (*n ++) {
+	case 'B':
+		if (*n ++ == 'i' &&
+			*n ++ == 'l' &&
+			*n ++ == 'l' &&
+			*n ++ == 'i') {
+			switch (*n ++) {
+			case 'a':
+				if (*n ++ == 'r' &&
+					*n ++ == 'd' &&
+					*n ++ == 'e') {
+					const char* p = n;
+					if (*n ++ == 'n') {
+						r = n;
+						t = token_t::billiarden;
+						return true;
+					}
+					else {
+						r = p;
+						t = token_t::billiarde;
+						return true;
+					}
+				}
+				return false;
+			case 'o':
+				if (*n ++ == 'n') {
+					const char* p = n;
+					if (*n ++ == 'e' &&
+						*n ++ == 'n') {
+						r = n;
+						t = token_t::billionen;
+						return true;
+					}
+					else {
+						r = p;
+						t = token_t::billion;
+						return true;
+					}
+				}
+			}
+		}
+		return false;
+	case 'M':
+		if (*n ++ == 'i' &&
+			*n ++ == 'l' &&
+			*n ++ == 'l' &&
+			*n ++ == 'i') {
+			switch (*n ++) {
+			case 'a':
+				if (*n ++ == 'r' &&
+					*n ++ == 'd' &&
+					*n ++ == 'e') {
+					const char* p = n;
+					if (*n ++ == 'n') {
+						r = n;
+						t = token_t::milliarden;
+						return true;
+					}
+					else {
+						r = p;
+						t = token_t::milliarde;
+						return true;
+					}
+				}
+				return false;
+			case 'o':
+				if (*n ++ == 'n') {
+					const char* p = n;
+					if (*n ++ == 'e' &&
+						*n ++ == 'n') {
+						r = n;
+						t = token_t::millionen;
+						return true;
+					}
+					else {
+						r = p;
+						t = token_t::million;
+						return true;
+					}
+				}
+			}
+		}
+		return false;
+	case 'a':
+		if (*n ++ == 'c' &&
+			*n ++ == 'h' &&
+			*n ++ == 't') {
+			r = n;
+			t = token_t::acht;
+			return true;
+		}
+		return false;
+	case 'd':
+		if (*n ++ == 'r' &&
+			*n ++ == 'e' &&
+			*n ++ == 'i') {
+			r = n;
+			t = token_t::drei;
+			return true;
+		}
+		return false;
+	case 'e':
+		switch (*n ++) {
+		case 'i':
+			if (*n ++ == 'n') {
+				const char* p = n;
+				switch (*n ++) {
+				case 'e':
+					r = n;
+					t = token_t::eine;
+					return true;
+				case 's':
+					r = n;
+					t = token_t::eins;
+					return true;
+				default:
+					r = p;
+					t = token_t::ein;
+					return true;
+				}
+			}
+			return false;
+		case 'l':
+			if (*n ++ == 'f') {
+				r = n;
+				t = token_t::elf;
+				return true;
+			}
+		}
+		return false;
+	case 'f':
+		if (*n ++ == 'u' &&
+			*n ++ == 'e' &&
+			*n ++ == 'n' &&
+			*n ++ == 'f') {
+			r = n;
+			t = token_t::fuenf;
+			return true;
+		}
+		return false;
+	case 'h':
+		if (*n ++ == 'u' &&
+			*n ++ == 'n' &&
+			*n ++ == 'd' &&
+			*n ++ == 'e' &&
+			*n ++ == 'r' &&
+			*n ++ == 't') {
+			r = n;
+			t = token_t::hundert;
+			return true;
+		}
+		return false;
+	case 'n':
+		switch (*n ++) {
+		case 'e':
+			if (*n ++ == 'u' &&
+				*n ++ == 'n') {
+				r = n;
+				t = token_t::neun;
+				return true;
+			}
+			return false;
+		case 'u':
+			if (*n ++ == 'l' &&
+				*n ++ == 'l') {
+				r = n;
+				t = token_t::null;
+				return true;
+			}
+		}
+		return false;
+	case 's':
+		switch (*n ++) {
+		case 'e':
+			if (*n ++ == 'c' &&
+				*n ++ == 'h') {
+				const char* p = n;
+				if (*n ++ == 's') {
+					r = n;
+					t = token_t::sechs;
+					return true;
+				}
+				else {
+					r = p;
+					t = token_t::sech;
+					return true;
+				}
+			}
+			return false;
+		case 'i':
+			if (*n ++ == 'e' &&
+				*n ++ == 'b') {
+				const char* p = n;
+				if (*n ++ == 'e' &&
+					*n ++ == 'n') {
+					r = n;
+					t = token_t::sieben;
+					return true;
+				}
+				else {
+					r = p;
+					t = token_t::sieb;
+					return true;
+				}
+			}
+			return false;
+		case 's':
+			if (*n ++ == 'i' &&
+				*n ++ == 'g') {
+				r = n;
+				t = token_t::ssig;
+				return true;
+			}
+		}
+		return false;
+	case 't':
+		if (*n ++ == 'a' &&
+			*n ++ == 'u' &&
+			*n ++ == 's' &&
+			*n ++ == 'e' &&
+			*n ++ == 'n' &&
+			*n ++ == 'd') {
+			r = n;
+			t = token_t::tausend;
+			return true;
+		}
+		return false;
+	case 'u':
+		if (*n ++ == 'n' &&
+			*n ++ == 'd') {
+			r = n;
+			t = token_t::und;
+			return true;
+		}
+		return false;
+	case 'v':
+		if (*n ++ == 'i' &&
+			*n ++ == 'e' &&
+			*n ++ == 'r') {
+			r = n;
+			t = token_t::vier;
+			return true;
+		}
+		return false;
+	case 'z':
+		switch (*n ++) {
+		case 'e':
+			if (*n ++ == 'h' &&
+				*n ++ == 'n') {
+				r = n;
+				t = token_t::zehn;
+				return true;
+			}
+			return false;
+		case 'i':
+			if (*n ++ == 'g') {
+				r = n;
+				t = token_t::zig;
+				return true;
+			}
+			return false;
+		case 'w':
+			switch (*n ++) {
+			case 'a':
+				if (*n ++ == 'n') {
+					r = n;
+					t = token_t::zwan;
+					return true;
+				}
+				return false;
+			case 'e':
+				if (*n ++ == 'i') {
+					r = n;
+					t = token_t::zwei;
+					return true;
+				}
+				return false;
+			case 'o':
+				if (*n ++ == 'e' &&
+					*n ++ == 'l' &&
+					*n ++ == 'f') {
+					r = n;
+					t = token_t::zwoelf;
+					return true;
+				}
+			}
+		}
+	}
+	return false;
+}
+$ print 'plus =add' 'minus =sub' mul 'mal =mul' div 'power hoch =pow'|calc-gen-func
+bool Parser::lookup_token(const char* n, token_t::type_t& t, const char*& r)
+{
+	// pattern: div|hoch|m(al|inus|ul)|p(lus|ower)
+	switch (*n ++) {
+	case 'd':
+		if (*n ++ == 'i' &&
+			*n ++ == 'v') {
+			r = n;
+			t = token_t::div;
+			return true;
+		}
+		return false;
+	case 'h':
+		if (*n ++ == 'o' &&
+			*n ++ == 'c' &&
+			*n ++ == 'h') {
+			r = n;
+			t = token_t::pow;
+			return true;
+		}
+		return false;
+	case 'm':
+		switch (*n ++) {
+		case 'a':
+			if (*n ++ == 'l') {
+				r = n;
+				t = token_t::mul;
+				return true;
+			}
+			return false;
+		case 'i':
+			if (*n ++ == 'n' &&
+				*n ++ == 'u' &&
+				*n ++ == 's') {
+				r = n;
+				t = token_t::sub;
+				return true;
+			}
+			return false;
+		case 'u':
+			if (*n ++ == 'l') {
+				r = n;
+				t = token_t::mul;
+				return true;
+			}
+		}
+		return false;
+	case 'p':
+		switch (*n ++) {
+		case 'l':
+			if (*n ++ == 'u' &&
+				*n ++ == 's') {
+				r = n;
+				t = token_t::add;
+				return true;
+			}
+			return false;
+		case 'o':
+			if (*n ++ == 'w' &&
+				*n ++ == 'e' &&
+				*n ++ == 'r') {
+				r = n;
+				t = token_t::pow;
+				return true;
+			}
+		}
+	}
+	return false;
+}
+$ diff -u0 -Lsrc <(src -n) -Lgen <(calc-token -T -gn|calc-gen-func)
+$ diff -u0 -Lsrc <(src -e) -Lgen <(print 'plus =add' 'minus =sub' mul 'mal =mul' div 'power hoch =pow'|calc-gen-func)
+$
+
+--[ num-set ]------------------------------------------------------------------
+
+$ num-set() { [[ "$1" == [12] ]] && cut -d $'\t' -f$1 num-set.txt; }
+$ diff -u0 <(num-set 1) <(num-set 2|./calc -iVN 2>&1)|ssed 1,3d
+-1000000000
+-2000000000
+-1000000000000
+-2000000000000
+-1000000000000000
+-2000000000000000
++calc: parse error:57:6: expected token "Million" but got "Milliarde"
++calc: parse error:57:6: eine Milliarde
++calc: parse error:57:6:      ^
++calc: parse error:58:6: expected token EON but got "Milliarden"
++calc: parse error:58:6: zwei Milliarden
++calc: parse error:58:6:      ^
++calc: parse error:59:6: expected token "Million" but got "Billion"
++calc: parse error:59:6: eine Billion
++calc: parse error:59:6:      ^
++calc: parse error:60:6: expected token EON but got "Billionen"
++calc: parse error:60:6: zwei Billionen
++calc: parse error:60:6:      ^
++calc: parse error:61:6: expected token "Million" but got "Billiarde"
++calc: parse error:61:6: eine Billiarde
++calc: parse error:61:6:      ^
++calc: parse error:62:6: expected token EON but got "Billiarden"
++calc: parse error:62:6: zwei Billiarden
++calc: parse error:62:6:      ^
+$
+
+--[ empty ]--------------------------------------------------------------------
+
+$ calc() { ./calc -Va "$@"; }
+$ calc -N ''
+calc: parse error:1:1: empty numeral expression
+calc: parse error:1:1: 
+calc: parse error:1:1: ^
+command failed: calc -N ''
+$ calc -E ''
+calc: parse error:1:1: empty expression
+calc: parse error:1:1: 
+calc: parse error:1:1: ^
+command failed: calc -E ''
+$ calc -N ' '
+calc: parse error:1:1: empty numeral expression
+calc: parse error:1:1:  
+calc: parse error:1:1: ^
+command failed: calc -N ' '
+$ calc -N ' ' -s
+calc: parse error:1:1: empty numeral expression
+calc: parse error:1:1:  
+calc: parse error:1:1: ^
+command failed: calc -N ' ' -s
+$ calc -E ' '
+calc: parse error:1:2: empty expression
+calc: parse error:1:2:  
+calc: parse error:1:2:  ^
+command failed: calc -E ' '
+$ calc -E ' ' -s
+calc: parse error:1:2: empty expression
+calc: parse error:1:2:  
+calc: parse error:1:2:  ^
+command failed: calc -E ' ' -s
+$ calc -N z
+calc: parse error:1:1: unexpected text 'z'
+calc: parse error:1:1: z
+calc: parse error:1:1: ^
+command failed: calc -N z
+$ calc -E z
+calc: parse error:1:1: unexpected text 'z'
+calc: parse error:1:1: z
+calc: parse error:1:1: ^
+command failed: calc -E z
+$ calc -N ' z'
+calc: parse error:1:2: unexpected text 'z'
+calc: parse error:1:2:  z
+calc: parse error:1:2:  ^
+command failed: calc -N ' z'
+$ calc -N ' z' -s
+calc: parse error:1:2: unexpected text 'z'
+calc: parse error:1:2:  z
+calc: parse error:1:2:  ^
+command failed: calc -N ' z' -s
+$ calc -E ' z'
+calc: parse error:1:2: unexpected text 'z'
+calc: parse error:1:2:  z
+calc: parse error:1:2:  ^
+command failed: calc -E ' z'
+$ calc -E ' z' -s
+calc: parse error:1:2: unexpected text 'z'
+calc: parse error:1:2:  z
+calc: parse error:1:2:  ^
+command failed: calc -E ' z' -s
+$ calc -E 1z
+calc: parse error:1:2: space needed after LIT token
+calc: parse error:1:2: 1z
+calc: parse error:1:2:  ^
+command failed: calc -E 1z
+$ calc -E 1z -s
+calc: parse error:1:2: unexpected text 'z'
+calc: parse error:1:2: 1z
+calc: parse error:1:2:  ^
+command failed: calc -E 1z -s
+$ calc -E '1 z'
+calc: parse error:1:3: unexpected text 'z'
+calc: parse error:1:3: 1 z
+calc: parse error:1:3:   ^
+command failed: calc -E '1 z'
+$ calc -E '1+z'
+calc: parse error:1:3: unexpected text 'z'
+calc: parse error:1:3: 1+z
+calc: parse error:1:3:   ^
+command failed: calc -E '1+z'
+$ calc -E 1plusz
+calc: parse error:1:2: space needed after LIT token
+calc: parse error:1:2: 1plusz
+calc: parse error:1:2:  ^
+command failed: calc -E 1plusz
+$ calc -E 1plusz -s
+calc: parse error:1:6: unexpected text 'z'
+calc: parse error:1:6: 1plusz
+calc: parse error:1:6:      ^
+command failed: calc -E 1plusz -s
+$ calc -E '1 plusz'
+calc: parse error:1:7: space needed after ADD token
+calc: parse error:1:7: 1 plusz
+calc: parse error:1:7:       ^
+command failed: calc -E '1 plusz'
+$ calc -E '1 plusz' -s
+calc: parse error:1:7: unexpected text 'z'
+calc: parse error:1:7: 1 plusz
+calc: parse error:1:7:       ^
+command failed: calc -E '1 plusz' -s
+$ calc -E '1 plus z'
+calc: parse error:1:8: unexpected text 'z'
+calc: parse error:1:8: 1 plus z
+calc: parse error:1:8:        ^
+command failed: calc -E '1 plus z'
+$ calc -E '1 plus z' -s
+calc: parse error:1:8: unexpected text 'z'
+calc: parse error:1:8: 1 plus z
+calc: parse error:1:8:        ^
+command failed: calc -E '1 plus z' -s
+$
+
+--[ space ]--------------------------------------------------------------------
+
+$ calc() { ./calc -VaN "$@"; }
+$ calc 'eins'
+1
+$ calc -s 'eins'
+1
+$ calc ' eins'
+calc: parse error:1:1: space not allowed between BON and "eins" tokens
+calc: parse error:1:1:  eins
+calc: parse error:1:1: ^
+command failed: calc ' eins'
+$ calc -s ' eins'
+1
+$ calc 'eins '
+calc: parse error:1:5: space not allowed between "eins" and EON tokens
+calc: parse error:1:5: eins 
+calc: parse error:1:5:     ^
+command failed: calc 'eins '
+$ calc -s 'eins '
+1
+$ calc ' eins '
+calc: parse error:1:1: space not allowed between BON and "eins" tokens
+calc: parse error:1:1:  eins 
+calc: parse error:1:1: ^
+command failed: calc ' eins '
+$ calc -s ' eins '
+1
+$ calc ' Million'
+calc: parse error:1:2: unexpected token "Million" in numeral
+calc: parse error:1:2:  Million
+calc: parse error:1:2:  ^
+command failed: calc ' Million'
+$ calc -s ' Million'
+calc: parse error:1:2: unexpected token "Million" in numeral
+calc: parse error:1:2:  Million
+calc: parse error:1:2:  ^
+command failed: calc -s ' Million'
+$ calc 'Million'
+calc: parse error:1:1: unexpected token "Million" in numeral
+calc: parse error:1:1: Million
+calc: parse error:1:1: ^
+command failed: calc 'Million'
+$ calc -s 'Million'
+calc: parse error:1:1: unexpected token "Million" in numeral
+calc: parse error:1:1: Million
+calc: parse error:1:1: ^
+command failed: calc -s 'Million'
+$ calc ' eine Million'
+calc: parse error:1:1: space not allowed between BON and "eine" tokens
+calc: parse error:1:1:  eine Million
+calc: parse error:1:1: ^
+command failed: calc ' eine Million'
+$ calc -s ' eine Million'
+1000000
+$ calc 'eine Million'
+1000000
+$ calc -s 'eine Million'
+1000000
+$ calc 'eineMillion'
+calc: parse error:1:5: space needed between "eine" and "Million" tokens
+calc: parse error:1:5: eineMillion
+calc: parse error:1:5:     ^
+command failed: calc 'eineMillion'
+$ calc -s 'eineMillion'
+1000000
+$ calc 'eine Million eins'
+1000001
+$ calc -s 'eine Million eins'
+1000001
+$ calc 'eine Millioneins'
+calc: parse error:1:13: space needed after "Million" token
+calc: parse error:1:13: eine Millioneins
+calc: parse error:1:13:             ^
+command failed: calc 'eine Millioneins'
+$ calc -s 'eine Millioneins'
+1000001
+$ calc 'einundvierzig'
+41
+$ calc -s 'einundvierzig'
+41
+$ calc 'einund vierzig'
+calc: parse error:1:7: space not allowed between "und" and "vier" tokens
+calc: parse error:1:7: einund vierzig
+calc: parse error:1:7:       ^
+command failed: calc 'einund vierzig'
+$ calc -s 'einund vierzig'
+41
+$
+
+--[ space2 ]-------------------------------------------------------------------
+
+$ calc() { ./calc -aVE "$@"; }
+# $ spaces() { awk '{for(i=1;i<=NF;i++){for(j=1;j<i;j++)printf("%s ",$j);for(j=i;j<=NF;j++)printf("%s",$j);printf("\n")}}' <<< "$@"; }
+# $ gen() { spaces "$@"|while read -r e; do c="calc '$e'"; echo "$ $c"; eval "$c 2>&1"; done; }
+# $ gen 'eine Million plus zwei Millionen'
+$ calc 'eineMillionpluszweiMillionen'
+calc: parse error:1:5: space needed between "eine" and "Million" tokens
+calc: parse error:1:5: eineMillionpluszweiMillionen
+calc: parse error:1:5:     ^
+command failed: calc 'eineMillionpluszweiMillionen'
+$ calc 'eine MillionpluszweiMillionen'
+calc: parse error:1:13: space needed after "Million" token
+calc: parse error:1:13: eine MillionpluszweiMillionen
+calc: parse error:1:13:             ^
+command failed: calc 'eine MillionpluszweiMillionen'
+$ calc 'eine Million pluszweiMillionen'
+calc: parse error:1:18: space needed after ADD token
+calc: parse error:1:18: eine Million pluszweiMillionen
+calc: parse error:1:18:                  ^
+command failed: calc 'eine Million pluszweiMillionen'
+$ calc 'eine Million plus zweiMillionen'
+calc: parse error:1:23: space needed between "zwei" and "Millionen" tokens
+calc: parse error:1:23: eine Million plus zweiMillionen
+calc: parse error:1:23:                       ^
+command failed: calc 'eine Million plus zweiMillionen'
+$ calc 'eine Million plus zwei Millionen'
+3000000.000000
+$
+
+--[ space3 ]-------------------------------------------------------------------
+
+$ calc() { ./calc -aVE "$@"; }
+$ calc 'einszwei'
+calc: parse error:1:5: space needed after NUM token
+calc: parse error:1:5: einszwei
+calc: parse error:1:5:     ^
+command failed: calc 'einszwei'
+$ calc 'eins zwei'
+calc: parse error:1:6: expected token EOE but got NUM
+calc: parse error:1:6: eins zwei
+calc: parse error:1:6:      ^
+command failed: calc 'eins zwei'
+$ calc 'einszwei' -s
+calc: parse error:1:5: expected token EOE but got NUM
+calc: parse error:1:5: einszwei
+calc: parse error:1:5:     ^
+command failed: calc 'einszwei' -s
+$ calc 'eins zwei' -s
+calc: parse error:1:6: expected token EOE but got NUM
+calc: parse error:1:6: eins zwei
+calc: parse error:1:6:      ^
+command failed: calc 'eins zwei' -s
+$ calc 'einszweiund'
+calc: parse error:1:5: space needed after NUM token
+calc: parse error:1:5: einszweiund
+calc: parse error:1:5:     ^
+command failed: calc 'einszweiund'
+$ calc 'eins zweiund'
+calc: parse error:1:13: unexpected token EON in zehn_base
+calc: parse error:1:13: eins zweiund
+calc: parse error:1:13:             ^
+command failed: calc 'eins zweiund'
+$ calc 'einszweiund' -s
+calc: parse error:1:12: unexpected token EON in zehn_base
+calc: parse error:1:12: einszweiund
+calc: parse error:1:12:            ^
+command failed: calc 'einszweiund' -s
+$ calc 'eins zweiund' -s
+calc: parse error:1:13: unexpected token EON in zehn_base
+calc: parse error:1:13: eins zweiund
+calc: parse error:1:13:             ^
+command failed: calc 'eins zweiund' -s
+$
+
+--[ tail-char ]----------------------------------------------------------------
+
+$ calc() { ./calc -Va "$@"; }
+$ calc -N 'eine Million*zwei'
+calc: parse error:1:13: space needed after "Million" token
+calc: parse error:1:13: eine Million*zwei
+calc: parse error:1:13:             ^
+command failed: calc -N 'eine Million*zwei'
+$ calc -s -N 'eine Million*zwei'
+calc: parse error:1:13: unexpected text '*zwei'
+calc: parse error:1:13: eine Million*zwei
+calc: parse error:1:13:             ^
+command failed: calc -s -N 'eine Million*zwei'
+$ calc -N 'eine Million *zwei'
+calc: parse error:1:14: unexpected text '*zwei'
+calc: parse error:1:14: eine Million *zwei
+calc: parse error:1:14:              ^
+command failed: calc -N 'eine Million *zwei'
+$ calc -s -N 'eine Million *zwei'
+calc: parse error:1:14: unexpected text '*zwei'
+calc: parse error:1:14: eine Million *zwei
+calc: parse error:1:14:              ^
+command failed: calc -s -N 'eine Million *zwei'
+$ calc -N 'eine Million* zwei'
+calc: parse error:1:13: space needed after "Million" token
+calc: parse error:1:13: eine Million* zwei
+calc: parse error:1:13:             ^
+command failed: calc -N 'eine Million* zwei'
+$ calc -s -N 'eine Million* zwei'
+calc: parse error:1:13: unexpected text '* zwei'
+calc: parse error:1:13: eine Million* zwei
+calc: parse error:1:13:             ^
+command failed: calc -s -N 'eine Million* zwei'
+$ calc -N 'eine Million * zwei'
+calc: parse error:1:14: unexpected text '* zwei'
+calc: parse error:1:14: eine Million * zwei
+calc: parse error:1:14:              ^
+command failed: calc -N 'eine Million * zwei'
+$ calc -s -N 'eine Million * zwei'
+calc: parse error:1:14: unexpected text '* zwei'
+calc: parse error:1:14: eine Million * zwei
+calc: parse error:1:14:              ^
+command failed: calc -s -N 'eine Million * zwei'
+$ calc -E 'eine Million*zwei'
+2000000.000000
+$ calc -s -E 'eine Million*zwei'
+2000000.000000
+$ calc -E 'eine Million *zwei'
+2000000.000000
+$ calc -s -E 'eine Million *zwei'
+2000000.000000
+$ calc -E 'eine Million* zwei'
+2000000.000000
+$ calc -s -E 'eine Million* zwei'
+2000000.000000
+$ calc -E 'eine Million * zwei'
+2000000.000000
+$ calc -s -E 'eine Million * zwei'
+2000000.000000
+$
+
+--[ eins ]---------------------------------------------------------------------
+
+# $ calc-token -gn -T|trie --trie=ternary --output=expr --expr=perl --gen=compact
+# Billi(?:arde(?:n)?|on(?:en)?)|Milli(?:arde(?:n)?|on(?:en)?)|acht|drei|e(?:in(?:e|s)?|lf)|fuenf|hundert|n(?:eun|ull)|s(?:ech(?:s)?|ieb(?:en)?|sig)|tausend|und|vier|z(?:ehn|ig|w(?:an|ei|oelf))
+$ spaces() { ssed -R 's/Billi(?:arde(?:n)?|on(?:en)?)|Milli(?:arde(?:n)?|on(?:en)?)|acht|drei|e(?:in(?:e|s)?|lf)|fuenf|hundert|n(?:eun|ull)|s(?:ech(?:s)?|ieb(?:en)?|sig)|tausend|und|vier|z(?:ehn|ig|w(?:an|ei|oelf))/ \0 /g;s/ {2,}/ /g;s/^ //;s/ $//' ${1:+"$1"}; }
+$ eins() { if [ "$1" == '-s' ]; then shift; eins "$@"|spaces; else ssed -R 's/elf/'"$2"'/g;s/ein[es]?/'"$1"'/g;s/(?<=Million)(?!en)/en/g' ein2.txt; fi; }
+$ calc() { ./calc -i "$@"; }
+$ calc -N < ein.txt
+1
+11
+111
+1111
+11111
+111111
+1111111
+11111111
+111111111
+1111111111
+11111111111
+111111111111
+$ calc -E < ein.txt
+1.000000
+11.000000
+111.000000
+1111.000000
+11111.000000
+111111.000000
+1111111.000000
+11111111.000000
+111111111.000000
+1111111111.000000
+11111111111.000000
+111111111111.000000
+$ spaces ein.txt|calc -N -s
+1
+11
+111
+1111
+11111
+111111
+1111111
+11111111
+111111111
+1111111111
+11111111111
+111111111111
+$ spaces ein.txt|calc -E -s
+1.000000
+11.000000
+111.000000
+1111.000000
+11111.000000
+111111.000000
+1111111.000000
+11111111.000000
+111111111.000000
+1111111111.000000
+11111111111.000000
+111111111111.000000
+$ calc -N < ein2.txt
+1
+11
+111
+1111
+11111
+111111
+1111111
+11111111
+111111111
+1111111111
+11111111111
+111111111111
+$ calc -E < ein2.txt
+1.000000
+11.000000
+111.000000
+1111.000000
+11111.000000
+111111.000000
+1111111.000000
+11111111.000000
+111111111.000000
+1111111111.000000
+11111111111.000000
+111111111111.000000
+$ spaces ein2.txt|calc -N -s
+1
+11
+111
+1111
+11111
+111111
+1111111
+11111111
+111111111
+1111111111
+11111111111
+111111111111
+$ spaces ein2.txt|calc -E -s
+1.000000
+11.000000
+111.000000
+1111.000000
+11111.000000
+111111.000000
+1111111.000000
+11111111.000000
+111111111.000000
+1111111111.000000
+11111111111.000000
+111111111111.000000
+$ eins zwei zweiundzwanzig|calc -N
+2
+22
+222
+2222
+22222
+222222
+2222222
+22222222
+222222222
+2222222222
+22222222222
+222222222222
+$ eins zwei zweiundzwanzig|calc -E
+2.000000
+22.000000
+222.000000
+2222.000000
+22222.000000
+222222.000000
+2222222.000000
+22222222.000000
+222222222.000000
+2222222222.000000
+22222222222.000000
+222222222222.000000
+$ eins -s zwei zweiundzwanzig|calc -N -s
+2
+22
+222
+2222
+22222
+222222
+2222222
+22222222
+222222222
+2222222222
+22222222222
+222222222222
+$ eins -s zwei zweiundzwanzig|calc -E -s
+2.000000
+22.000000
+222.000000
+2222.000000
+22222.000000
+222222.000000
+2222222.000000
+22222222.000000
+222222222.000000
+2222222222.000000
+22222222222.000000
+222222222222.000000
+$ eins drei dreiunddreissig|calc -N
+3
+33
+333
+3333
+33333
+333333
+3333333
+33333333
+333333333
+3333333333
+33333333333
+333333333333
+$ eins drei dreiunddreissig|calc -E
+3.000000
+33.000000
+333.000000
+3333.000000
+33333.000000
+333333.000000
+3333333.000000
+33333333.000000
+333333333.000000
+3333333333.000000
+33333333333.000000
+333333333333.000000
+$ eins -s drei dreiunddreissig|calc -N -s
+3
+33
+333
+3333
+33333
+333333
+3333333
+33333333
+333333333
+3333333333
+33333333333
+333333333333
+$ eins -s drei dreiunddreissig|calc -E -s
+3.000000
+33.000000
+333.000000
+3333.000000
+33333.000000
+333333.000000
+3333333.000000
+33333333.000000
+333333333.000000
+3333333333.000000
+33333333333.000000
+333333333333.000000
+$ eins vier vierundvierzig|calc -N
+4
+44
+444
+4444
+44444
+444444
+4444444
+44444444
+444444444
+4444444444
+44444444444
+444444444444
+$ eins -s vier vierundvierzig|calc -N -s
+4
+44
+444
+4444
+44444
+444444
+4444444
+44444444
+444444444
+4444444444
+44444444444
+444444444444
+$ eins -s vier vierundvierzig|calc -E -s
+4.000000
+44.000000
+444.000000
+4444.000000
+44444.000000
+444444.000000
+4444444.000000
+44444444.000000
+444444444.000000
+4444444444.000000
+44444444444.000000
+444444444444.000000
+$ eins fuenf fuenfundfuenfzig|calc -N
+5
+55
+555
+5555
+55555
+555555
+5555555
+55555555
+555555555
+5555555555
+55555555555
+555555555555
+$ eins fuenf fuenfundfuenfzig|calc -E
+5.000000
+55.000000
+555.000000
+5555.000000
+55555.000000
+555555.000000
+5555555.000000
+55555555.000000
+555555555.000000
+5555555555.000000
+55555555555.000000
+555555555555.000000
+$ eins -s fuenf fuenfundfuenfzig|calc -N -s
+5
+55
+555
+5555
+55555
+555555
+5555555
+55555555
+555555555
+5555555555
+55555555555
+555555555555
+$ eins -s fuenf fuenfundfuenfzig|calc -E -s
+5.000000
+55.000000
+555.000000
+5555.000000
+55555.000000
+555555.000000
+5555555.000000
+55555555.000000
+555555555.000000
+5555555555.000000
+55555555555.000000
+555555555555.000000
+$ eins sechs sechsundsechzig|calc -N
+6
+66
+666
+6666
+66666
+666666
+6666666
+66666666
+666666666
+6666666666
+66666666666
+666666666666
+$ eins sechs sechsundsechzig|calc -E
+6.000000
+66.000000
+666.000000
+6666.000000
+66666.000000
+666666.000000
+6666666.000000
+66666666.000000
+666666666.000000
+6666666666.000000
+66666666666.000000
+666666666666.000000
+$ eins -s sechs sechsundsechzig|calc -N -s
+6
+66
+666
+6666
+66666
+666666
+6666666
+66666666
+666666666
+6666666666
+66666666666
+666666666666
+$ eins -s sechs sechsundsechzig|calc -E -s
+6.000000
+66.000000
+666.000000
+6666.000000
+66666.000000
+666666.000000
+6666666.000000
+66666666.000000
+666666666.000000
+6666666666.000000
+66666666666.000000
+666666666666.000000
+$ eins sieben siebenundsiebzig|calc -N
+7
+77
+777
+7777
+77777
+777777
+7777777
+77777777
+777777777
+7777777777
+77777777777
+777777777777
+$ eins sieben siebenundsiebzig|calc -E
+7.000000
+77.000000
+777.000000
+7777.000000
+77777.000000
+777777.000000
+7777777.000000
+77777777.000000
+777777777.000000
+7777777777.000000
+77777777777.000000
+777777777777.000000
+$ eins -s sieben siebenundsiebzig|calc -N -s
+7
+77
+777
+7777
+77777
+777777
+7777777
+77777777
+777777777
+7777777777
+77777777777
+777777777777
+$ eins -s sieben siebenundsiebzig|calc -E -s
+7.000000
+77.000000
+777.000000
+7777.000000
+77777.000000
+777777.000000
+7777777.000000
+77777777.000000
+777777777.000000
+7777777777.000000
+77777777777.000000
+777777777777.000000
+$ eins acht achtundachtzig|calc -N
+8
+88
+888
+8888
+88888
+888888
+8888888
+88888888
+888888888
+8888888888
+88888888888
+888888888888
+$ eins acht achtundachtzig|calc -E
+8.000000
+88.000000
+888.000000
+8888.000000
+88888.000000
+888888.000000
+8888888.000000
+88888888.000000
+888888888.000000
+8888888888.000000
+88888888888.000000
+888888888888.000000
+$ eins -s acht achtundachtzig|calc -N -s
+8
+88
+888
+8888
+88888
+888888
+8888888
+88888888
+888888888
+8888888888
+88888888888
+888888888888
+$ eins -s acht achtundachtzig|calc -E -s
+8.000000
+88.000000
+888.000000
+8888.000000
+88888.000000
+888888.000000
+8888888.000000
+88888888.000000
+888888888.000000
+8888888888.000000
+88888888888.000000
+888888888888.000000
+$ eins neun neunundneunzig|calc -N
+9
+99
+999
+9999
+99999
+999999
+9999999
+99999999
+999999999
+9999999999
+99999999999
+999999999999
+$ eins neun neunundneunzig|calc -E
+9.000000
+99.000000
+999.000000
+9999.000000
+99999.000000
+999999.000000
+9999999.000000
+99999999.000000
+999999999.000000
+9999999999.000000
+99999999999.000000
+999999999999.000000
+$ eins -s neun neunundneunzig|calc -N -s
+9
+99
+999
+9999
+99999
+999999
+9999999
+99999999
+999999999
+9999999999
+99999999999
+999999999999
+$ eins -s neun neunundneunzig|calc -E -s
+9.000000
+99.000000
+999.000000
+9999.000000
+99999.000000
+999999.000000
+9999999.000000
+99999999.000000
+999999999.000000
+9999999999.000000
+99999999999.000000
+999999999999.000000
+$
+
+--[ neun ]---------------------------------------------------------------------
+
+$ calc() { ./calc -aN "$@"; }
+$ calc 'neunhundertneunundneunzigtausendneunhundertneunundneunzig Millionen'
+999999000000
+$ calc -s 'neun hundert neun und neun zig tausend neun hundert neun und neun zig Millionen'
+999999000000
+$ calc 'neunhundertneunundneunzigtausendneunhundertneunundneunzig Millionen neunhundertneunundneunzigtausendneunhundertneunundneunzig'
+999999999999
+$ calc -s 'neun hundert neun und neun zig tausend neun hundert neun und neun zig Millionen neun hundert neun und neun zig tausend neun hundert neun und neun zig'
+999999999999
+$
+
+--[ calc ]---------------------------------------------------------------------
+
+$ calc() { ./calc -aE "$@"; }
+$ calc 'dreihundertzweiundneunzig mal 7' '12 minus 3'
+2744.000000
+9.000000
+$
+
